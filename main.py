@@ -26,10 +26,67 @@ class Scheduler:
     def add_task(self, task):
         """Add a new task to the scheduler."""
         self.tasks.append(task)
+        self.tasks = self.quick_sort(self.tasks, key=lambda t: t.deadline)  # Keep tasks sorted by deadline
+
+    def quick_sort(self, arr, key=lambda x: x):
+        """Quick sort implementation for tasks."""
+        if len(arr) <= 1:
+            return arr
+        pivot = key(arr[len(arr) // 2])
+        left = [x for x in arr if key(x) < pivot]
+        middle = [x for x in arr if key(x) == pivot]
+        right = [x for x in arr if key(x) > pivot]
+        return self.quick_sort(left, key) + middle + self.quick_sort(right, key)
+
+    def binary_search(self, name):
+        """Search for a task by name using binary search."""
+        low, high = 0, len(self.tasks) - 1
+        while low <= high:
+            mid = (low + high) // 2
+            if self.tasks[mid].name == name:
+                return mid
+            elif self.tasks[mid].name < name:
+                low = mid + 1
+            else:
+                high = mid - 1
+        return -1  # Task not found
 
     def remove_task(self, task_name):
-        """Remove a task by its name."""
-        self.tasks = [task for task in self.tasks if task.name != task_name]
+        """Remove a task by its name using binary search."""
+        idx = self.binary_search(task_name)
+        if idx != -1:
+            self.tasks.pop(idx)
+
+    def max_non_overlapping_tasks(self):
+        """Use dynamic programming to find the maximum number of non-overlapping tasks."""
+        n = len(self.tasks)
+        if n == 0:
+            return []
+        self.tasks.sort(key=lambda task: task.deadline)
+        
+        dp = [0] * n
+        dp[0] = 1
+        prev = [-1] * n  # Store the previous index for traceback
+        
+        for i in range(1, n):
+            include = 1
+            for j in range(i - 1, -1, -1):
+                if self.tasks[j].deadline + datetime.timedelta(hours=self.tasks[j].duration) <= self.tasks[i].deadline:
+                    include += dp[j]
+                    prev[i] = j
+                    break
+            dp[i] = max(dp[i - 1], include)
+        
+        selected_tasks = []
+        i = n - 1
+        while i >= 0:
+            if prev[i] != -1 and dp[i] != dp[i - 1]:
+                selected_tasks.append(self.tasks[i])
+                i = prev[i]
+            else:
+                i -= 1
+
+        return selected_tasks
 
     def get_task_list(self):
         """Return a list of all tasks."""
@@ -37,7 +94,6 @@ class Scheduler:
 
     def display_gantt_chart(self):
         """Generate a Gantt chart for the scheduled tasks."""
-        self.tasks.sort(key=lambda task: task.deadline)
         fig, ax = plt.subplots(figsize=(10, 5))
         current_time = datetime.datetime.now()
         for i, task in enumerate(self.tasks):
@@ -83,11 +139,12 @@ class SchedulerApp:
         tk.Button(root, text="Add Task", command=self.add_task).grid(row=5, column=0, padx=5, pady=5)
         tk.Button(root, text="Remove Task", command=self.remove_task).grid(row=5, column=1, padx=5, pady=5)
         tk.Button(root, text="Show Gantt Chart", command=self.show_gantt_chart).grid(row=6, column=0, columnspan=2, padx=5, pady=5)
+        tk.Button(root, text="Optimal Schedule", command=self.show_optimal_schedule).grid(row=7, column=0, columnspan=2, padx=5, pady=5)
 
         # Task List
-        tk.Label(root, text="Task List:").grid(row=7, column=0, columnspan=2, padx=5, pady=5)
+        tk.Label(root, text="Task List:").grid(row=8, column=0, columnspan=2, padx=5, pady=5)
         self.task_listbox = tk.Listbox(root, width=50, height=10)
-        self.task_listbox.grid(row=8, column=0, columnspan=2, padx=5, pady=5)
+        self.task_listbox.grid(row=9, column=0, columnspan=2, padx=5, pady=5)
 
     def add_task(self):
         """Add a new task based on user input."""
@@ -138,8 +195,16 @@ class SchedulerApp:
             return
         self.scheduler.display_gantt_chart()
 
+    def show_optimal_schedule(self):
+        """Display the optimal schedule using dynamic programming."""
+        optimal_tasks = self.scheduler.max_non_overlapping_tasks()
+        if not optimal_tasks:
+            messagebox.showinfo("Optimal Schedule", "No non-overlapping tasks found.")
+        else:
+            messagebox.showinfo("Optimal Schedule", f"Optimal tasks: {[task.name for task in optimal_tasks]}")
 
-# Run the Tkinter application
+
+# Run the application
 if __name__ == "__main__":
     scheduler = Scheduler()
     root = tk.Tk()
